@@ -73,7 +73,7 @@ jobs:
 
       # Upload tfplan to GCS
       - name: Upload tfplan to GCS
-        run: gsutil cp deploy/terraform/tfplan gs://$TF_BUCKET/vector/${{ steps.product.outputs.product}}-dev/tfplan
+        run: gsutil cp deploy/terraform/tfplan gs://vector-datadog-tfstate-ash/vector/${{ steps.product.outputs.product}}-dev/tfplan
 
       # Upload plan output artifact
       - name: Upload plan output
