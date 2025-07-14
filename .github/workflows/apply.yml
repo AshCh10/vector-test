@@ -47,6 +47,19 @@ jobs:
         id: tag
         run: echo "tag=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
+      - name: Ensure Artifact Registry exists
+        run: |
+          if ! gcloud artifacts repositories describe ${{ env.REPOSITORY_NAME }} --location=${{ env.REGION }} >/dev/null 2>&1; then
+            echo "Repository does not exist. Creating..."
+            gcloud artifacts repositories create ${{ env.REPOSITORY_NAME }} \
+              --repository-format=docker \
+              --location=${{ env.REGION }} \
+              --description="Vector repo for ${{ env.ENV }}"
+          else
+            echo "Repository already exists."
+          fi
+
+
       # Build and push image
       - name: Build and push image
         run: |
