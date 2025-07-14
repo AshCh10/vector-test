@@ -38,8 +38,12 @@ jobs:
 
       - name: Terraform Init
         if: steps.product.outputs.product != ''
-        run: terraform init
+        run: |
+          terraform init \
+            -backend-config="bucket=vector-datadog-tfstate" \
+            -backend-config="prefix=vector/${{ steps.product.outputs.product }}-dev"
         working-directory: deploy/terraform
+
 
       - name: Terraform Validate
         if: steps.product.outputs.product != ''
