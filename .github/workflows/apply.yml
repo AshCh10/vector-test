@@ -325,6 +325,12 @@ jobs:
           fi
           echo "gcp_project=$GCP_PROJECT" >> $GITHUB_OUTPUT
 
+      - name: Authenticate to GCP
+        id: auth
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
       # Setup Terraform
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
