@@ -173,6 +173,12 @@ jobs:
           fi
           echo "gcp_project=$GCP_PROJECT" >> $GITHUB_OUTPUT
 
+      - name: Authenticate to GCP
+        id: auth
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
       # Configure Docker auth
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
@@ -185,7 +191,7 @@ jobs:
       # Ensure Artifact Registry exists
       - name: Ensure Artifact Registry exists
         run: |
-          REPO_NAME="${{ steps.product.outputs.product }}-repository"
+          REPO_NAME="$vector-{{ steps.product.outputs.product }}-repository"
           REGION="${{ env.REGION }}"
           PROJECT_ID="${{ steps.tfvars.outputs.gcp_project }}"
 
@@ -203,7 +209,7 @@ jobs:
       # Build and push image
       - name: Build and push image
         run: |
-          IMAGE_URI="${{ env.REGION }}-docker.pkg.dev/${{ steps.tfvars.outputs.gcp_project }}/${{ steps.product.outputs.product }}-repository/my-vector-local:${{ steps.tag.outputs.tag }}"
+          IMAGE_URI="${{ env.REGION }}-docker.pkg.dev/${{ steps.tfvars.outputs.gcp_project }}/$vector-{{ steps.product.outputs.product }}-repository/my-vector-local:${{ steps.tag.outputs.tag }}"
           echo "IMAGE_URI=$IMAGE_URI"
           docker build -t "$IMAGE_URI" .
           docker push "$IMAGE_URI"
