@@ -231,15 +231,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      # Parse product
-      # - name: Parse product
-      #   id: product
-      #   run: |
-      #     PRODUCT=$(git diff --name-only origin/main...HEAD | grep '^products/' | awk -F'/' '{print $2}' | sort | uniq | head -n 1)
-      #     if [ -z "$PRODUCT" ]; then
-      #       PRODUCT="br"  # fallback
-      #     fi
-      #     echo "product=$PRODUCT" >> $GITHUB_OUTPUT
 
       - name: Download build metadata
         uses: actions/download-artifact@v4
