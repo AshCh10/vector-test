@@ -209,11 +209,9 @@
 name: Deploy Vector Collector
 
 on:
-  workflow_run:
-    workflows: ["Terraform Plan"]
-    types:
-      - completed
-
+  push:
+    branches:
+      - main
 
 jobs:
   deploy-dev:
@@ -236,12 +234,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: build-metadata
+          path: metadata
 
       - name: Read product and tag
         id: set-values
         run: |
-          PRODUCT=$(cat product.txt)
-          TAG=$(cat tag.txt)
+          PRODUCT=$(cat metadata/product.txt)
+          TAG=$(cat metadata/tag.txt)
           echo "product=$PRODUCT" >> $GITHUB_OUTPUT
           echo "tag=$TAG" >> $GITHUB_OUTPUT
 
