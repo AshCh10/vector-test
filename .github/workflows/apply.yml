@@ -28,6 +28,17 @@ jobs:
         id: tag
         run: echo "tag=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
+      - name: Parse gcp_project from tfvars
+        id: tfvars
+        run: |
+          TFVARS_FILE=../../products/${{ steps.product.outputs.product }}/terraform.dev.tfvars
+          GCP_PROJECT=$(grep -E '^ *gcp_project *=' "$TFVARS_FILE" | cut -d '"' -f2)
+          if [ -z "$GCP_PROJECT" ]; then
+            echo "❌ gcp_project not found in $TFVARS_FILE"
+            exit 1
+          fi
+          echo "gcp_project=$GCP_PROJECT" >> $GITHUB_OUTPUT
+
       - name: Build and push image
         run: |
           IMAGE_URI="europe-west3-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/vector-test-repository/my-vector-local:${{ steps.tag.outputs.tag }}"
