@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      TF_BUCKET: vector-datadog-tfstate
+      TF_BUCKET: vector-datadog-tfstate-ash
       REGION: europe-west3
 
     steps:
