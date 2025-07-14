@@ -223,13 +223,21 @@ jobs:
 
       # Terraform Init
       - name: Terraform Init
-        run: terraform init
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
+        run: |
+          terraform init \
+            -backend-config="bucket=vector-datadog-tfstate-ash" \
+            -backend-config="prefix=vector/${{ steps.product.outputs.product }}-dev"
         working-directory: deploy/terraform
 
       # Terraform Apply
       - name: Terraform Apply (Dev)
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
         run: terraform apply -auto-approve -var="image_tag=${{ steps.tag.outputs.tag }}" -var-file="../../products/${{ steps.product.outputs.product }}/terraform.dev.tfvars"
         working-directory: deploy/terraform
+
 
       # Export tag for prod
       - name: Set output tag
