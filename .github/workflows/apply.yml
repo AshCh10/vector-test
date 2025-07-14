@@ -15,23 +15,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
+      # Parse product folder name
       - name: Parse product
         id: product
         run: |
           PRODUCT=$(git diff --name-only origin/main...HEAD | grep '^products/' | awk -F'/' '{print $2}' | sort | uniq | head -n 1)
+          if [ -z "$PRODUCT" ]; then
+            PRODUCT="br"  # fallback
+          fi
           echo "product=$PRODUCT" >> $GITHUB_OUTPUT
 
-      - name: Configure Docker for Artifact Registry
-        run: gcloud auth configure-docker europe-west3-docker.pkg.dev --quiet
-
-      - name: Generate tag
-        id: tag
-        run: echo "tag=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-
+      # Parse gcp_project from tfvars
       - name: Parse gcp_project from tfvars
         id: tfvars
         run: |
-          TFVARS_FILE=../../products/${{ steps.product.outputs.product }}/terraform.dev.tfvars
+          TFVARS_FILE=products/${{ steps.product.outputs.product }}/terraform.dev.tfvars
+          echo "Looking for tfvars file at: $TFVARS_FILE"
           GCP_PROJECT=$(grep -E '^ *gcp_project *=' "$TFVARS_FILE" | cut -d '"' -f2)
           if [ -z "$GCP_PROJECT" ]; then
             echo "❌ gcp_project not found in $TFVARS_FILE"
@@ -39,20 +38,33 @@ jobs:
           fi
           echo "gcp_project=$GCP_PROJECT" >> $GITHUB_OUTPUT
 
+      # Configure Docker auth
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker europe-west3-docker.pkg.dev --quiet
+
+      # Generate image tag
+      - name: Generate tag
+        id: tag
+        run: echo "tag=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      # Build and push image
       - name: Build and push image
         run: |
-          IMAGE_URI="europe-west3-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/vector-test-repository/my-vector-local:${{ steps.tag.outputs.tag }}"
+          IMAGE_URI="europe-west3-docker.pkg.dev/${{ steps.tfvars.outputs.gcp_project }}/${{ steps.product.outputs.product }}-dev-repository/my-vector-local:${{ steps.tag.outputs.tag }}"
           echo "IMAGE_URI=$IMAGE_URI"
           docker build -t "$IMAGE_URI" .
           docker push "$IMAGE_URI"
 
+      # Setup Terraform
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
+      # Terraform Init
       - name: Terraform Init
         run: terraform init
         working-directory: deploy/terraform
 
+      # Terraform Apply
       - name: Terraform Apply (Dev)
         run: terraform apply -auto-approve -var="image_tag=${{ steps.tag.outputs.tag }}" -var-file="../../products/${{ steps.product.outputs.product }}/terraform.dev.tfvars"
         working-directory: deploy/terraform
@@ -67,19 +79,39 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
+      # Parse product folder name
       - name: Parse product
         id: product
         run: |
           PRODUCT=$(git diff --name-only origin/main...HEAD | grep '^products/' | awk -F'/' '{print $2}' | sort | uniq | head -n 1)
+          if [ -z "$PRODUCT" ]; then
+            PRODUCT="br"  # fallback
+          fi
           echo "product=$PRODUCT" >> $GITHUB_OUTPUT
 
+      # Parse gcp_project from tfvars
+      - name: Parse gcp_project from tfvars
+        id: tfvars
+        run: |
+          TFVARS_FILE=products/${{ steps.product.outputs.product }}/terraform.prod.tfvars
+          echo "Looking for tfvars file at: $TFVARS_FILE"
+          GCP_PROJECT=$(grep -E '^ *gcp_project *=' "$TFVARS_FILE" | cut -d '"' -f2)
+          if [ -z "$GCP_PROJECT" ]; then
+            echo "❌ gcp_project not found in $TFVARS_FILE"
+            exit 1
+          fi
+          echo "gcp_project=$GCP_PROJECT" >> $GITHUB_OUTPUT
+
+      # Setup Terraform
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
+      # Terraform Init
       - name: Terraform Init
         run: terraform init
         working-directory: deploy/terraform
 
+      # Terraform Apply
       - name: Terraform Apply (Prod)
         run: terraform apply -auto-approve -var="image_tag=${{ needs.deploy-dev.outputs.tag }}" -var-file="../../products/${{ steps.product.outputs.product }}/terraform.prod.tfvars"
         working-directory: deploy/terraform
