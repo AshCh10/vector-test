@@ -1,3 +1,77 @@
+# name: Terraform Plan
+
+# on:
+#   pull_request:
+#     branches:
+#       - main
+
+# jobs:
+#   plan:
+#     runs-on: ubuntu-latest
+
+#     env:
+#       TF_BUCKET: vector-datadog-tfstate-ash
+#       REGION: europe-west3
+
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v3
+#         with:
+#           fetch-depth: 0
+
+#       - name: Parse product from changes
+#         id: product
+#         run: |
+#           PRODUCT=$(git diff --name-only origin/main...HEAD | grep '^products/' | awk -F'/' '{print $2}' | sort | uniq | head -n 1)
+#           if [ -z "$PRODUCT" ]; then
+#             echo "❌ No product changes detected. Skipping workflow."
+#             exit 0
+#           fi
+#           echo "product=$PRODUCT" >> $GITHUB_OUTPUT
+
+#       - name: Generate image tag
+#         id: image
+#         run: echo "tag=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+#       - name: Export image tag for Terraform
+#         run: echo "TF_VAR_image_tag=${{ steps.image.outputs.tag }}" >> $GITHUB_ENV
+
+
+#       - name: Authenticate to GCP
+#         id: auth
+#         uses: google-github-actions/auth@v1
+#         with:
+#           credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+#       - name: Set GOOGLE_APPLICATION_CREDENTIALS env
+#         run: echo "GOOGLE_APPLICATION_CREDENTIALS=${{ steps.auth.outputs.credentials_file_path }}" >> $GITHUB_ENV
+
+#       - name: Setup Terraform
+#         uses: hashicorp/setup-terraform@v3
+
+
+#       - name: Terraform Init
+#         env:
+#           GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
+#         run: |
+#           terraform init \
+#             -backend-config="bucket=$TF_BUCKET" \
+#             -backend-config="prefix=vector/${{ steps.product.outputs.product }}-dev"
+#         working-directory: deploy/terraform
+
+#       - name: Terraform Validate
+#         env:
+#           GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
+#         run: terraform validate
+#         working-directory: deploy/terraform
+
+#       - name: Terraform Plan
+#         env:
+#           GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
+#         run: terraform plan -var-file="../../products/${{ steps.product.outputs.product }}/terraform.dev.tfvars"
+#         working-directory: deploy/terraform
+
+
 name: Terraform Plan
 
 on:
@@ -27,15 +101,23 @@ jobs:
             echo "❌ No product changes detected. Skipping workflow."
             exit 0
           fi
+          echo "$PRODUCT" > product.txt
           echo "product=$PRODUCT" >> $GITHUB_OUTPUT
 
       - name: Generate image tag
         id: image
-        run: echo "tag=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+        run: |
+          TAG=$(git rev-parse --short HEAD)
+          echo "$TAG" > tag.txt
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
 
-      - name: Export image tag for Terraform
-        run: echo "TF_VAR_image_tag=${{ steps.image.outputs.tag }}" >> $GITHUB_ENV
-
+      - name: Upload metadata artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-metadata
+          path: |
+            product.txt
+            tag.txt
 
       - name: Authenticate to GCP
         id: auth
@@ -43,12 +125,8 @@ jobs:
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      - name: Set GOOGLE_APPLICATION_CREDENTIALS env
-        run: echo "GOOGLE_APPLICATION_CREDENTIALS=${{ steps.auth.outputs.credentials_file_path }}" >> $GITHUB_ENV
-
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
-
 
       - name: Terraform Init
         env:
@@ -70,16 +148,3 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
         run: terraform plan -var-file="../../products/${{ steps.product.outputs.product }}/terraform.dev.tfvars"
         working-directory: deploy/terraform
-
-      - name: Save product and tag to files
-        run: |
-          echo "${{ steps.product.outputs.product }}" > product.txt
-          echo "${{ steps.image.outputs.tag }}" > tag.txt
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-metadata
-          path: |
-            product.txt
-            tag.txt
