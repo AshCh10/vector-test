@@ -209,9 +209,10 @@
 name: Deploy Vector Collector
 
 on:
-  push:
-    branches:
-      - main
+  workflow_run:
+    workflows: ["Terraform Plan"]
+    types:
+      - completed
 
 jobs:
   deploy-dev:
@@ -222,6 +223,7 @@ jobs:
     env:
       REGION: europe-west3
       TF_BUCKET: vector-datadog-tfstate-ash
+
     outputs:
       tag: ${{ steps.set-tag.outputs.tag }}
 
@@ -229,24 +231,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-
-      - name: Download build metadata
+      - name: Download metadata from plan
         uses: actions/download-artifact@v4
         with:
           name: build-metadata
-          path: metadata
 
       - name: Read product and tag
         id: set-values
         run: |
-          PRODUCT=$(cat metadata/product.txt)
-          TAG=$(cat metadata/tag.txt)
+          PRODUCT=$(cat product.txt)
+          TAG=$(cat tag.txt)
           echo "product=$PRODUCT" >> $GITHUB_OUTPUT
           echo "tag=$TAG" >> $GITHUB_OUTPUT
 
-
-      # Parse gcp_project and pubsub_topic_name from tfvars
-      - name: Parse variables from tfvars
+      - name: Parse gcp_project and pubsub_topic_name from tfvars
         id: tfvars
         run: |
           TFVARS_FILE=products/${{ steps.set-values.outputs.product }}/terraform.dev.tfvars
@@ -266,11 +264,9 @@ jobs:
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      # Configure Docker auth
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
 
-      # Render vector.yaml from template
       - name: Render vector.yaml
         run: |
           TEMPLATE_FILE=products/${{ steps.set-values.outputs.product }}/vector.yaml.tmpl
@@ -282,18 +278,11 @@ jobs:
           echo "Rendered vector.yaml:"
           cat "$OUTPUT_FILE"
 
-      # Generate image tag
-      - name: Generate tag
-        id: tag
-        run: echo "tag=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-
-      # Ensure Artifact Registry exists
       - name: Ensure Artifact Registry exists
         run: |
           REPO_NAME="vector-${{ steps.set-values.outputs.product }}-repository"
           REGION="${{ env.REGION }}"
           PROJECT_ID="${{ steps.tfvars.outputs.gcp_project }}"
-
           if ! gcloud artifacts repositories describe "$REPO_NAME" --location="$REGION" --project="$PROJECT_ID" >/dev/null 2>&1; then
             echo "Repository does not exist. Creating..."
             gcloud artifacts repositories create "$REPO_NAME" \
@@ -305,19 +294,16 @@ jobs:
             echo "Repository already exists."
           fi
 
-      # Build and push image
       - name: Build and push image
         run: |
-          IMAGE_URI="${{ env.REGION }}-docker.pkg.dev/${{ steps.tfvars.outputs.gcp_project }}/vector-${{ steps.set-values.outputs.product }}-repository/my-vector-local:${{ steps.tag.outputs.tag }}"
+          IMAGE_URI="${{ env.REGION }}-docker.pkg.dev/${{ steps.tfvars.outputs.gcp_project }}/vector-${{ steps.set-values.outputs.product }}-repository/my-vector-local:${{ steps.set-values.outputs.tag }}"
           echo "IMAGE_URI=$IMAGE_URI"
           docker build -t "$IMAGE_URI" .
           docker push "$IMAGE_URI"
 
-      # Setup Terraform
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
-      # Terraform Init
       - name: Terraform Init
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
@@ -327,17 +313,11 @@ jobs:
             -backend-config="prefix=vector/${{ steps.set-values.outputs.product }}-dev"
         working-directory: deploy/terraform
 
-      # Terraform Apply
       - name: Terraform Apply (Dev)
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
-        run: terraform apply -auto-approve -var="image_tag=${{ steps.tag.outputs.tag }}" -var-file="../../products/${{ steps.set-values.outputs.product }}/terraform.dev.tfvars"
+        run: terraform apply -auto-approve -var="image_tag=${{ steps.set-values.outputs.tag }}" -var-file="../../products/${{ steps.set-values.outputs.product }}/terraform.dev.tfvars"
         working-directory: deploy/terraform
-
-      # Export tag for prod
-      - name: Set output tag
-        id: set-tag
-        run: echo "tag=${{ steps.tag.outputs.tag }}" >> $GITHUB_OUTPUT
 
   deploy-prod:
     needs: deploy-dev
@@ -353,18 +333,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      # Parse product
-      - name: Parse product
-        id: product
-        run: |
-          PRODUCT=$(git diff --name-only origin/main...HEAD | grep '^products/' | awk -F'/' '{print $2}' | sort | uniq | head -n 1)
-          if [ -z "$PRODUCT" ]; then
-            echo "No Product to pass"
-            exit 1
-          fi
-          echo "product=$PRODUCT" >> $GITHUB_OUTPUT
+      - name: Download metadata from plan
+        uses: actions/download-artifact@v4
+        with:
+          name: build-metadata
 
-      # Parse gcp_project from tfvars
+      - name: Read product and tag
+        id: set-values
+        run: |
+          PRODUCT=$(cat product.txt)
+          TAG=$(cat tag.txt)
+          echo "product=$PRODUCT" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
       - name: Parse gcp_project from tfvars
         id: tfvars
         run: |
@@ -383,11 +364,9 @@ jobs:
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      # Setup Terraform
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
-      # Terraform Init
       - name: Terraform Init
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
@@ -397,9 +376,8 @@ jobs:
             -backend-config="prefix=vector/${{ steps.set-values.outputs.product }}-prod"
         working-directory: deploy/terraform
 
-      # Terraform Apply
       - name: Terraform Apply (Prod)
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
-        run: terraform apply -auto-approve -var="image_tag=${{ needs.deploy-dev.outputs.tag }}" -var-file="../../products/${{ steps.set-values.outputs.product }}/terraform.prod.tfvars"
+        run: terraform apply -auto-approve -var="image_tag=${{ steps.set-values.outputs.tag }}" -var-file="../../products/${{ steps.set-values.outputs.product }}/terraform.prod.tfvars"
         working-directory: deploy/terraform
