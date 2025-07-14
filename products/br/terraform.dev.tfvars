@@ -1,0 +1,6 @@
+gcp_project = "sep-analytics-sandbox"
+gcp_region  = "europe-west3"
+system      = "br"
+env = "dev"
+pubsub_topic_name = "vector-br-dev-events"
+vector_domain  = ""

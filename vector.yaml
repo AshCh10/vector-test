@@ -1,0 +1,39 @@
+# Vector Configuration
+data_dir: /var/lib/vector
+
+# Sources
+sources:
+  http:
+    type: http_server
+    address: 0.0.0.0:8080         
+    encoding: json
+    headers:
+      - "*"                   
+    method: POST
+    path: /webhook
+    response_code: 200
+    response_body: "OK"
+    query_parameters:
+      - s
+      - idclient   
+
+transforms:
+  enriched_http:
+    type: remap
+    inputs:
+      - http
+    source: |
+      # .message = encode_gzip(encode_json(.message))
+      # log("Raw incoming event: " + encode_json(.))
+      . = encode_gzip(encode_json(.))
+      # . = { "data": .data }
+
+sinks:
+  gcp_pubsub_sink:
+    type: gcp_pubsub
+    inputs: [enriched_http]
+    project: "sep-analytics-sandbox"
+    topic: "vector-radio"
+    encoding:
+      codec: raw_message
+    # payload_key: "data"

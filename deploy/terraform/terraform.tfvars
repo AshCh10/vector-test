@@ -1,0 +1,5 @@
+gcp_project = "sep-analytics-sandbox"
+gcp_region  = "europe-west3"
+system      = "vector"
+vector_domain  = ""
+env = "br-dev"
