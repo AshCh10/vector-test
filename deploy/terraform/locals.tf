@@ -23,7 +23,7 @@ locals {
 
 locals {
   system_env_base              = "${var.system}-${var.env}-"
-  artifact_repository          = "${var.system}-${var.env}-repository"
+  artifact_repository          = "$vector-{var.system}-repository"
   artifact_registry_location   = "${var.gcp_region}-docker.pkg.dev"
   artifact_registry_root       = "${local.artifact_registry_location}/${var.gcp_project}"
   artifact_registry_repository = local.artifact_repository
