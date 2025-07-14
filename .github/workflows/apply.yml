@@ -189,9 +189,10 @@ jobs:
         run: echo "tag=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
       # Ensure Artifact Registry exists
+      # Ensure Artifact Registry exists
       - name: Ensure Artifact Registry exists
         run: |
-          REPO_NAME="$vector-{{ steps.product.outputs.product }}-repository"
+          REPO_NAME="vector-${{ steps.product.outputs.product }}-repository"
           REGION="${{ env.REGION }}"
           PROJECT_ID="${{ steps.tfvars.outputs.gcp_project }}"
 
@@ -206,13 +207,15 @@ jobs:
             echo "Repository already exists."
           fi
 
+
       # Build and push image
       - name: Build and push image
         run: |
-          IMAGE_URI="${{ env.REGION }}-docker.pkg.dev/${{ steps.tfvars.outputs.gcp_project }}/$vector-{{ steps.product.outputs.product }}-repository/my-vector-local:${{ steps.tag.outputs.tag }}"
+          IMAGE_URI="${{ env.REGION }}-docker.pkg.dev/${{ steps.tfvars.outputs.gcp_project }}/vector-${{ steps.product.outputs.product }}-repository/my-vector-local:${{ steps.tag.outputs.tag }}"
           echo "IMAGE_URI=$IMAGE_URI"
           docker build -t "$IMAGE_URI" .
           docker push "$IMAGE_URI"
+
 
       # Setup Terraform
       - name: Setup Terraform
