@@ -490,15 +490,15 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
       - name: Parse product from changes
         id: product
         run: |
-          FILES=$(git diff --name-only origin/main...HEAD)
           echo "Changed files:"
-          echo "$FILES"
-
-          PRODUCT=$(echo "$FILES" | grep '^products/' | awk -F'/' '{print $2}' | sort | uniq | head -n 1)
+          git diff --name-only origin/main...HEAD
+          PRODUCT=$(git diff --name-only origin/main...HEAD | grep '^products/' | awk -F'/' '{print $2}' | sort | uniq | head -n 1)
           if [ -z "$PRODUCT" ]; then
             echo "❌ No product changes detected. Skipping workflow."
             exit 0
@@ -602,7 +602,7 @@ jobs:
             > "$OUTPUT_FILE"
           cat "$OUTPUT_FILE"
 
-      - name: Generate tag
+      - name: Use tag from plan
         id: tag
         run: echo "tag=${{ needs.plan.outputs.image_tag }}" >> $GITHUB_OUTPUT
 
@@ -650,7 +650,7 @@ jobs:
     needs: deploy-dev
     runs-on: ubuntu-latest
     environment:
-      name: production # 👈 Requires manual approval in GitHub UI!
+      name: production # 👈 Requires manual approval!
 
     env:
       REGION: europe-west3
