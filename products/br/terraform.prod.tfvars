@@ -1,4 +1,4 @@
-gcp_project = "sep-analytics-sandbox"
+gcp_project = "stalwart-camera-463819-k5"
 gcp_region  = "europe-west3"
 system      = "br"
 vector_domain  = ""
