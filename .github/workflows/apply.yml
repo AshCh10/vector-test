@@ -310,7 +310,8 @@ jobs:
         run: |
           PRODUCT=$(git diff --name-only origin/main...HEAD | grep '^products/' | awk -F'/' '{print $2}' | sort | uniq | head -n 1)
           if [ -z "$PRODUCT" ]; then
-            PRODUCT="br"
+            echo "No Product to pass"
+            exit 1
           fi
           echo "product=$PRODUCT" >> $GITHUB_OUTPUT
 
