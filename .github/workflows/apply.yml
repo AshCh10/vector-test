@@ -242,6 +242,13 @@ jobs:
           fi
           echo "product=$PRODUCT" >> $GITHUB_OUTPUT
 
+      - name: Generate image tag
+        id: image
+        run: echo "tag=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Export image tag for Terraform
+        run: echo "TF_VAR_image_tag=${{ steps.image.outputs.tag }}" >> $GITHUB_ENV
+
       - name: Authenticate to GCP
         id: auth
         uses: google-github-actions/auth@v1
@@ -266,7 +273,7 @@ jobs:
         working-directory: deploy/terraform
 
       - name: Terraform Plan
-        run: terraform plan -var-file="../../products/${{ steps.product.outputs.product }}/terraform.dev.tfvars" -no-color > plan.txt
+        run: terraform plan -var="image_tag=${{ steps.image.outputs.tag }}" -var-file="../../products/${{ steps.product.outputs.product }}/terraform.dev.tfvars" -no-color > plan.txt
         working-directory: deploy/terraform
 
       - name: Read plan output
