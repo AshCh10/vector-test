@@ -13,33 +13,53 @@
 
 #     env:
 #       REGION: europe-west3
+#       TF_BUCKET: vector-datadog-tfstate-ash
+#     outputs:
+#       tag: ${{ steps.set-tag.outputs.tag }}
 
 #     steps:
 #       - name: Checkout
 #         uses: actions/checkout@v3
 
 #       # Parse product
-#       - name: Parse product
+#       # - name: Parse product
+#       #   id: product
+#       #   run: |
+#       #     PRODUCT=$(git diff --name-only origin/main...HEAD | grep '^products/' | awk -F'/' '{print $2}' | sort | uniq | head -n 1)
+#       #     if [ -z "$PRODUCT" ]; then
+#       #       PRODUCT="br"  # fallback
+#       #     fi
+#       #     echo "product=$PRODUCT" >> $GITHUB_OUTPUT
+
+#       - name: Parse product from changes
 #         id: product
 #         run: |
-#           PRODUCT=$(git diff --name-only origin/main...HEAD | grep '^products/' | awk -F'/' '{print $2}' | sort | uniq | head -n 1)
+#           FILES=$(git diff --name-only origin/main...HEAD)
+#           echo "Changed files:"
+#           echo "$FILES"
+
+#           PRODUCT=$(echo "$FILES" | grep '^products/' | awk -F'/' '{print $2}' | sort | uniq | head -n 1)
 #           if [ -z "$PRODUCT" ]; then
-#             PRODUCT="br"  # fallback
+#             echo "❌ No product changes detected. Skipping workflow."
+#             exit 0
 #           fi
+#           echo "Detected product: $PRODUCT"
 #           echo "product=$PRODUCT" >> $GITHUB_OUTPUT
 
-#       # Parse gcp_project from tfvars
-#       - name: Parse gcp_project from tfvars
+#       # Parse gcp_project and pubsub_topic_name from tfvars
+#       - name: Parse variables from tfvars
 #         id: tfvars
 #         run: |
 #           TFVARS_FILE=products/${{ steps.product.outputs.product }}/terraform.dev.tfvars
 #           echo "Looking for tfvars file at: $TFVARS_FILE"
 #           GCP_PROJECT=$(grep -E '^ *gcp_project *=' "$TFVARS_FILE" | cut -d '"' -f2)
-#           if [ -z "$GCP_PROJECT" ]; then
-#             echo "❌ gcp_project not found in $TFVARS_FILE"
+#           PUBSUB_TOPIC_NAME=$(grep -E '^ *pubsub_topic_name *=' "$TFVARS_FILE" | cut -d '"' -f2)
+#           if [ -z "$GCP_PROJECT" ] || [ -z "$PUBSUB_TOPIC_NAME" ]; then
+#             echo "❌ gcp_project or pubsub_topic_name not found in $TFVARS_FILE"
 #             exit 1
 #           fi
 #           echo "gcp_project=$GCP_PROJECT" >> $GITHUB_OUTPUT
+#           echo "pubsub_topic_name=$PUBSUB_TOPIC_NAME" >> $GITHUB_OUTPUT
 
 #       - name: Authenticate to GCP
 #         id: auth
@@ -51,12 +71,23 @@
 #       - name: Configure Docker for Artifact Registry
 #         run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
 
+#       # Render vector.yaml from template
+#       - name: Render vector.yaml
+#         run: |
+#           TEMPLATE_FILE=products/${{ steps.product.outputs.product }}/vector.yaml.tmpl
+#           OUTPUT_FILE=vector.yaml
+#           cat "$TEMPLATE_FILE" \
+#             | sed "s|\${gcp_project}|${{ steps.tfvars.outputs.gcp_project }}|g" \
+#             | sed "s|\${pubsub_topic_name}|${{ steps.tfvars.outputs.pubsub_topic_name }}|g" \
+#             > "$OUTPUT_FILE"
+#           echo "Rendered vector.yaml:"
+#           cat "$OUTPUT_FILE"
+
 #       # Generate image tag
 #       - name: Generate tag
 #         id: tag
 #         run: echo "tag=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
-#       # Ensure Artifact Registry exists
 #       # Ensure Artifact Registry exists
 #       - name: Ensure Artifact Registry exists
 #         run: |
@@ -75,7 +106,6 @@
 #             echo "Repository already exists."
 #           fi
 
-
 #       # Build and push image
 #       - name: Build and push image
 #         run: |
@@ -83,7 +113,6 @@
 #           echo "IMAGE_URI=$IMAGE_URI"
 #           docker build -t "$IMAGE_URI" .
 #           docker push "$IMAGE_URI"
-
 
 #       # Setup Terraform
 #       - name: Setup Terraform
@@ -95,7 +124,7 @@
 #           GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
 #         run: |
 #           terraform init \
-#             -backend-config="bucket=vector-datadog-tfstate-ash" \
+#             -backend-config="bucket=${{ env.TF_BUCKET }}" \
 #             -backend-config="prefix=vector/${{ steps.product.outputs.product }}-dev"
 #         working-directory: deploy/terraform
 
@@ -105,7 +134,6 @@
 #           GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
 #         run: terraform apply -auto-approve -var="image_tag=${{ steps.tag.outputs.tag }}" -var-file="../../products/${{ steps.product.outputs.product }}/terraform.dev.tfvars"
 #         working-directory: deploy/terraform
-
 
 #       # Export tag for prod
 #       - name: Set output tag
@@ -120,6 +148,7 @@
 
 #     env:
 #       REGION: europe-west3
+#       TF_BUCKET: vector-datadog-tfstate-ash
 
 #     steps:
 #       - name: Checkout
@@ -131,7 +160,8 @@
 #         run: |
 #           PRODUCT=$(git diff --name-only origin/main...HEAD | grep '^products/' | awk -F'/' '{print $2}' | sort | uniq | head -n 1)
 #           if [ -z "$PRODUCT" ]; then
-#             PRODUCT="br"  # fallback
+#             echo "No Product to pass"
+#             exit 1
 #           fi
 #           echo "product=$PRODUCT" >> $GITHUB_OUTPUT
 
@@ -148,27 +178,42 @@
 #           fi
 #           echo "gcp_project=$GCP_PROJECT" >> $GITHUB_OUTPUT
 
+#       - name: Authenticate to GCP
+#         id: auth
+#         uses: google-github-actions/auth@v1
+#         with:
+#           credentials_json: ${{ secrets.GCP_SA_KEY }}
+
 #       # Setup Terraform
 #       - name: Setup Terraform
 #         uses: hashicorp/setup-terraform@v3
 
 #       # Terraform Init
 #       - name: Terraform Init
-#         run: terraform init
+#         env:
+#           GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
+#         run: |
+#           terraform init \
+#             -backend-config="bucket=${{ env.TF_BUCKET }}" \
+#             -backend-config="prefix=vector/${{ steps.product.outputs.product }}-prod"
 #         working-directory: deploy/terraform
 
 #       # Terraform Apply
 #       - name: Terraform Apply (Prod)
-#         run: terraform apply -auto-approve -var="image_tag=${{ needs.deploy-dev.outputs.set-tag.outputs.tag }}" -var-file="../../products/${{ steps.product.outputs.product }}/terraform.prod.tfvars"
+#         env:
+#           GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
+#         run: terraform apply -auto-approve -var="image_tag=${{ needs.deploy-dev.outputs.tag }}" -var-file="../../products/${{ steps.product.outputs.product }}/terraform.prod.tfvars"
 #         working-directory: deploy/terraform
 
 
 name: Deploy Vector Collector
 
 on:
-  push:
-    branches:
-      - main
+  workflow_run:
+    workflows: ["Terraform Plan"]
+    types:
+      - completed
+
 
 jobs:
   deploy-dev:
@@ -196,26 +241,18 @@ jobs:
       #     fi
       #     echo "product=$PRODUCT" >> $GITHUB_OUTPUT
 
-      - name: Parse product from changes
-        id: product
+      - name: Set product and tag values from Plan outputs
+        id: set-values
         run: |
-          FILES=$(git diff --name-only origin/main...HEAD)
-          echo "Changed files:"
-          echo "$FILES"
+          echo "product=${{ github.event.workflow_run.outputs.product }}" >> $GITHUB_OUTPUT
+          echo "tag=${{ github.event.workflow_run.outputs.tag }}" >> $GITHUB_OUTPUT
 
-          PRODUCT=$(echo "$FILES" | grep '^products/' | awk -F'/' '{print $2}' | sort | uniq | head -n 1)
-          if [ -z "$PRODUCT" ]; then
-            echo "❌ No product changes detected. Skipping workflow."
-            exit 0
-          fi
-          echo "Detected product: $PRODUCT"
-          echo "product=$PRODUCT" >> $GITHUB_OUTPUT
 
       # Parse gcp_project and pubsub_topic_name from tfvars
       - name: Parse variables from tfvars
         id: tfvars
         run: |
-          TFVARS_FILE=products/${{ steps.product.outputs.product }}/terraform.dev.tfvars
+          TFVARS_FILE=products/${{ steps.set-values.outputs.product }}/terraform.dev.tfvars
           echo "Looking for tfvars file at: $TFVARS_FILE"
           GCP_PROJECT=$(grep -E '^ *gcp_project *=' "$TFVARS_FILE" | cut -d '"' -f2)
           PUBSUB_TOPIC_NAME=$(grep -E '^ *pubsub_topic_name *=' "$TFVARS_FILE" | cut -d '"' -f2)
@@ -239,7 +276,7 @@ jobs:
       # Render vector.yaml from template
       - name: Render vector.yaml
         run: |
-          TEMPLATE_FILE=products/${{ steps.product.outputs.product }}/vector.yaml.tmpl
+          TEMPLATE_FILE=products/${{ steps.set-values.outputs.product }}/vector.yaml.tmpl
           OUTPUT_FILE=vector.yaml
           cat "$TEMPLATE_FILE" \
             | sed "s|\${gcp_project}|${{ steps.tfvars.outputs.gcp_project }}|g" \
@@ -256,7 +293,7 @@ jobs:
       # Ensure Artifact Registry exists
       - name: Ensure Artifact Registry exists
         run: |
-          REPO_NAME="vector-${{ steps.product.outputs.product }}-repository"
+          REPO_NAME="vector-${{ steps.set-values.outputs.product }}-repository"
           REGION="${{ env.REGION }}"
           PROJECT_ID="${{ steps.tfvars.outputs.gcp_project }}"
 
@@ -274,7 +311,7 @@ jobs:
       # Build and push image
       - name: Build and push image
         run: |
-          IMAGE_URI="${{ env.REGION }}-docker.pkg.dev/${{ steps.tfvars.outputs.gcp_project }}/vector-${{ steps.product.outputs.product }}-repository/my-vector-local:${{ steps.tag.outputs.tag }}"
+          IMAGE_URI="${{ env.REGION }}-docker.pkg.dev/${{ steps.tfvars.outputs.gcp_project }}/vector-${{ steps.set-values.outputs.product }}-repository/my-vector-local:${{ steps.tag.outputs.tag }}"
           echo "IMAGE_URI=$IMAGE_URI"
           docker build -t "$IMAGE_URI" .
           docker push "$IMAGE_URI"
@@ -290,14 +327,14 @@ jobs:
         run: |
           terraform init \
             -backend-config="bucket=${{ env.TF_BUCKET }}" \
-            -backend-config="prefix=vector/${{ steps.product.outputs.product }}-dev"
+            -backend-config="prefix=vector/${{ steps.set-values.outputs.product }}-dev"
         working-directory: deploy/terraform
 
       # Terraform Apply
       - name: Terraform Apply (Dev)
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
-        run: terraform apply -auto-approve -var="image_tag=${{ steps.tag.outputs.tag }}" -var-file="../../products/${{ steps.product.outputs.product }}/terraform.dev.tfvars"
+        run: terraform apply -auto-approve -var="image_tag=${{ steps.tag.outputs.tag }}" -var-file="../../products/${{ steps.set-values.outputs.product }}/terraform.dev.tfvars"
         working-directory: deploy/terraform
 
       # Export tag for prod
@@ -334,7 +371,7 @@ jobs:
       - name: Parse gcp_project from tfvars
         id: tfvars
         run: |
-          TFVARS_FILE=products/${{ steps.product.outputs.product }}/terraform.prod.tfvars
+          TFVARS_FILE=products/${{ steps.set-values.outputs.product }}/terraform.prod.tfvars
           echo "Looking for tfvars file at: $TFVARS_FILE"
           GCP_PROJECT=$(grep -E '^ *gcp_project *=' "$TFVARS_FILE" | cut -d '"' -f2)
           if [ -z "$GCP_PROJECT" ]; then
@@ -360,12 +397,12 @@ jobs:
         run: |
           terraform init \
             -backend-config="bucket=${{ env.TF_BUCKET }}" \
-            -backend-config="prefix=vector/${{ steps.product.outputs.product }}-prod"
+            -backend-config="prefix=vector/${{ steps.set-values.outputs.product }}-prod"
         working-directory: deploy/terraform
 
       # Terraform Apply
       - name: Terraform Apply (Prod)
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
-        run: terraform apply -auto-approve -var="image_tag=${{ needs.deploy-dev.outputs.tag }}" -var-file="../../products/${{ steps.product.outputs.product }}/terraform.prod.tfvars"
+        run: terraform apply -auto-approve -var="image_tag=${{ needs.deploy-dev.outputs.tag }}" -var-file="../../products/${{ steps.set-values.outputs.product }}/terraform.prod.tfvars"
         working-directory: deploy/terraform
