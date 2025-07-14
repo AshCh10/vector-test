@@ -464,7 +464,6 @@
 
 
 
-
 name: Vector Plan & Deploy
 
 on:
@@ -497,19 +496,19 @@ jobs:
       - name: Parse product from changes
         id: product
         run: |
+          echo "Changed files:"
+          git diff --name-only origin/main...HEAD
           PRODUCT=$(git diff --name-only origin/main...HEAD | grep '^products/' | awk -F'/' '{print $2}' | sort | uniq | head -n 1)
           if [ -z "$PRODUCT" ]; then
             echo "❌ No product changes detected. Skipping workflow."
             exit 0
           fi
+          echo "Detected product: $PRODUCT"
           echo "product=$PRODUCT" >> $GITHUB_OUTPUT
 
       - name: Generate image tag
         id: image
         run: echo "tag=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-
-      - name: Export image tag for Terraform
-        run: echo "TF_VAR_image_tag=${{ steps.image.outputs.tag }}" >> $GITHUB_ENV
 
       - name: Authenticate to GCP
         id: auth
@@ -603,7 +602,7 @@ jobs:
             > "$OUTPUT_FILE"
           cat "$OUTPUT_FILE"
 
-      - name: Generate tag
+      - name: Use tag from plan
         id: tag
         run: echo "tag=${{ needs.plan.outputs.image_tag }}" >> $GITHUB_OUTPUT
 
