@@ -49,11 +49,14 @@ jobs:
 
       - name: Terraform Init
         if: steps.product.outputs.product != ''
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
         run: |
           terraform init \
             -backend-config="bucket=vector-datadog-tfstate" \
             -backend-config="prefix=vector/${{ steps.product.outputs.product }}-dev"
         working-directory: deploy/terraform
+
 
 
       - name: Terraform Validate
