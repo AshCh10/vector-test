@@ -30,8 +30,8 @@ jobs:
 
       - name: Build and push image
         run: |
-          IMAGE_URI="europe-west3-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ steps.product.outputs.product }}-repository/my-vector-local:${{ steps.tag.outputs.tag }}"
-          echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
+          IMAGE_URI="europe-west3-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/vector-test-repository/my-vector-local:${{ steps.tag.outputs.tag }}"
+          echo "IMAGE_URI=$IMAGE_URI"
           docker build -t "$IMAGE_URI" .
           docker push "$IMAGE_URI"
 
