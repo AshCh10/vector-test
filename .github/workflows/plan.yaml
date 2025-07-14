@@ -51,6 +51,8 @@ jobs:
         if: steps.product.outputs.product != ''
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
+          CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE: ${{ steps.auth.outputs.credentials_file_path }}
+
         run: |
           terraform init \
             -backend-config="bucket=vector-datadog-tfstate" \
