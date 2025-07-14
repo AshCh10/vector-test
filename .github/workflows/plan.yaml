@@ -36,6 +36,17 @@ jobs:
         if: steps.product.outputs.product != ''
         uses: hashicorp/setup-terraform@v3
 
+      - name: Authenticate to GCP
+        if: steps.product.outputs.product != ''
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set GOOGLE_APPLICATION_CREDENTIALS
+        if: steps.product.outputs.product != ''
+        run: echo "GOOGLE_APPLICATION_CREDENTIALS=${{ steps.auth.outputs.credentials_file_path }}" >> $GITHUB_ENV
+
+
       - name: Terraform Init
         if: steps.product.outputs.product != ''
         run: |
