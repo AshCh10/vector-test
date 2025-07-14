@@ -199,11 +199,16 @@ jobs:
       - name: Parse product from changes
         id: product
         run: |
-          PRODUCT=$(git diff --name-only origin/main...HEAD | grep '^products/' | awk -F'/' '{print $2}' | sort | uniq | head -n 1)
+          FILES=$(git diff --name-only origin/main...HEAD)
+          echo "Changed files:"
+          echo "$FILES"
+
+          PRODUCT=$(echo "$FILES" | grep '^products/' | awk -F'/' '{print $2}' | sort | uniq | head -n 1)
           if [ -z "$PRODUCT" ]; then
             echo "❌ No product changes detected. Skipping workflow."
             exit 0
           fi
+          echo "Detected product: $PRODUCT"
           echo "product=$PRODUCT" >> $GITHUB_OUTPUT
 
       # Parse gcp_project and pubsub_topic_name from tfvars
