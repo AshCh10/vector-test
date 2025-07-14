@@ -80,3 +80,16 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
         run: terraform plan -var-file="../../products/${{ steps.product.outputs.product }}/terraform.dev.tfvars"
         working-directory: deploy/terraform
+
+      - name: Save product and tag to files
+        run: |
+          echo "${{ steps.product.outputs.product }}" > product.txt
+          echo "${{ steps.image.outputs.tag }}" > tag.txt
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: build-metadata
+          path: |
+            product.txt
+            tag.txt

@@ -241,11 +241,18 @@ jobs:
       #     fi
       #     echo "product=$PRODUCT" >> $GITHUB_OUTPUT
 
-      - name: Set product and tag values from Plan outputs
+      - name: Download build metadata
+        uses: actions/download-artifact@v3
+        with:
+          name: build-metadata
+
+      - name: Read product and tag
         id: set-values
         run: |
-          echo "product=${{ github.event.workflow_run.outputs.product }}" >> $GITHUB_OUTPUT
-          echo "tag=${{ github.event.workflow_run.outputs.tag }}" >> $GITHUB_OUTPUT
+          PRODUCT=$(cat product.txt)
+          TAG=$(cat tag.txt)
+          echo "product=$PRODUCT" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
 
 
       # Parse gcp_project and pubsub_topic_name from tfvars
