@@ -464,7 +464,6 @@
 
 
 
-
 name: Vector Plan & Deploy
 
 on:
@@ -491,8 +490,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
 
       - name: Parse product from changes
         id: product
@@ -507,9 +504,6 @@ jobs:
       - name: Generate image tag
         id: image
         run: echo "tag=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-
-      - name: Export image tag for Terraform
-        run: echo "TF_VAR_image_tag=${{ steps.image.outputs.tag }}" >> $GITHUB_ENV
 
       - name: Authenticate to GCP
         id: auth
@@ -651,7 +645,7 @@ jobs:
     needs: deploy-dev
     runs-on: ubuntu-latest
     environment:
-      name: production # 👈 Requires manual approval!
+      name: production # 👈 Requires manual approval in GitHub UI!
 
     env:
       REGION: europe-west3
