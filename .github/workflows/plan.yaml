@@ -109,18 +109,37 @@ jobs:
       - name: Export GCP credentials path
         run: echo "GOOGLE_APPLICATION_CREDENTIALS=${{ steps.auth.outputs.credentials_file_path }}" >> $GITHUB_ENV
 
-      # Parse product from changes
       - name: Parse product from changes
         id: product
         run: |
-          PRODUCT=$(git diff --name-only origin/main...HEAD | grep '^products/' | awk -F'/' '{print $2}' | sort | uniq | head -n 1)
+          echo "🔍 Changed files:"
+          FILES=$(git diff --name-only origin/main...HEAD)
+          echo "$FILES"
+
+          echo "🔎 Parsing product name from files..."
+          PRODUCT=$(echo "$FILES" | grep '^products/' | awk -F'/' '{print $2}' | sort | uniq | head -n 1)
+
           if [ -z "$PRODUCT" ]; then
             echo "❌ No product changes detected. Skipping workflow."
-            exit 1
+            exit 0
           fi
-          echo "Detected product: $PRODUCT"
+
+          echo "✅ Detected product: $PRODUCT"
           echo "product=$PRODUCT" >> $GITHUB_OUTPUT
-          echo "PRODUCT=$PRODUCT" >> $GITHUB_ENV
+
+
+      # # Parse product from changes
+      # - name: Parse product from changes
+      #   id: product
+      #   run: |
+      #     PRODUCT=$(git diff --name-only origin/main...HEAD | grep '^products/' | awk -F'/' '{print $2}' | sort | uniq | head -n 1)
+      #     if [ -z "$PRODUCT" ]; then
+      #       echo "❌ No product changes detected. Skipping workflow."
+      #       exit 1
+      #     fi
+      #     echo "Detected product: $PRODUCT"
+      #     echo "product=$PRODUCT" >> $GITHUB_OUTPUT
+      #     echo "PRODUCT=$PRODUCT" >> $GITHUB_ENV
 
       # Generate image tag
       - name: Generate image tag
