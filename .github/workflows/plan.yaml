@@ -184,7 +184,7 @@ jobs:
       - name: Terraform Plan
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
-        run: terraform plan -var-file="../../products/${{ steps.product.outputs.product }}/terraform.dev.tfvars" -no-color > plan.txt
+        run: terraform plan -var-file="../../products/${{ steps.product.outputs.product }}/terraform.dev.tfvars" -no-color -out=tfplan > plan.txt
         working-directory: deploy/terraform
 
 
