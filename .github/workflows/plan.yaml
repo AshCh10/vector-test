@@ -25,7 +25,7 @@ jobs:
           PRODUCT=$(git diff --name-only origin/main...HEAD | grep '^products/' | awk -F'/' '{print $2}' | sort | uniq | head -n 1)
           if [ -z "$PRODUCT" ]; then
             echo "❌ No product changes detected. Skipping workflow."
-            exit 0
+            exit 1
           fi
           echo "product=$PRODUCT" >> $GITHUB_OUTPUT
 
