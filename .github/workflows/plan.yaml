@@ -176,11 +176,17 @@ jobs:
         run: terraform validate
         working-directory: deploy/terraform
 
+      # - name: Terraform Plan
+      #   env:
+      #     GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
+      #   run: terraform plan -var-file="../../products/${{ steps.product.outputs.product }}/terraform.dev.tfvars" -out=tfplan
+      #   working-directory: deploy/terraform
       - name: Terraform Plan
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
-        run: terraform plan -var-file="../../products/${{ steps.product.outputs.product }}/terraform.dev.tfvars" -out=tfplan
+        run: terraform plan -var-file="../../products/${{ steps.product.outputs.product }}/terraform.dev.tfvars" -no-color > plan.txt
         working-directory: deploy/terraform
+
 
       # ✅ Upload tfplan to GCS (fix: with activated account)
       - name: Upload tfplan to GCS
