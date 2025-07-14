@@ -126,6 +126,7 @@ jobs:
 
           echo "✅ Detected product: $PRODUCT"
           echo "product=$PRODUCT" >> $GITHUB_OUTPUT
+          echo "PRODUCT=$PRODUCT" >> $GITHUB_ENV
 
 
       # # Parse product from changes
