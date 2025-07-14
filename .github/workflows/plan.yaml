@@ -73,6 +73,8 @@ jobs:
 
       # Upload tfplan to GCS
       - name: Upload tfplan to GCS
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
         run: gsutil cp deploy/terraform/tfplan gs://vector-datadog-tfstate-ash/vector/${{ steps.product.outputs.product}}-dev/tfplan
 
       # Upload plan output artifact
