@@ -25,7 +25,7 @@
 #           PRODUCT=$(git diff --name-only origin/main...HEAD | grep '^products/' | awk -F'/' '{print $2}' | sort | uniq | head -n 1)
 #           if [ -z "$PRODUCT" ]; then
 #             echo "❌ No product changes detected. Skipping workflow."
-#             exit 0
+#             exit 1
 #           fi
 #           echo "product=$PRODUCT" >> $GITHUB_OUTPUT
 
@@ -71,6 +71,39 @@
 #         run: terraform plan -var-file="../../products/${{ steps.product.outputs.product }}/terraform.dev.tfvars"
 #         working-directory: deploy/terraform
 
+#       # Upload tfplan to GCS
+#       - name: Upload tfplan to GCS
+#         env:
+#           GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
+#         run: gsutil cp deploy/terraform/tfplan gs://vector-datadog-tfstate-ash/vector/${{ steps.product.outputs.product}}-dev/tfplan
+
+#       # Upload plan output artifact
+#       - name: Upload plan output
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: plan-output
+#           path: deploy/terraform/plan.txt
+
+#       # Read plan output for comment
+#       - name: Read plan output
+#         id: read_plan
+#         run: |
+#           echo "PLAN<<EOF" >> $GITHUB_ENV
+#           cat deploy/terraform/plan.txt >> $GITHUB_ENV
+#           echo "EOF" >> $GITHUB_ENV
+#       # Comment plan on PR
+#       - name: Comment plan on PR
+#         uses: peter-evans/create-or-update-comment@v4
+#         with:
+#           issue-number: ${{ github.event.pull_request.number }}
+#           body: |
+#             ## 📦 Terraform Plan Result:
+#             Docker image built: `${{ env.IMAGE_URI }}`
+#             Terraform Plan Output:
+#             ```
+#             ${{ env.PLAN }}
+#             ```
+#             ✅ Plan file and image tag saved to GCS. Merge and Comment `yes` to apply the changes.
 
 name: Terraform Plan
 
@@ -83,105 +116,90 @@ jobs:
   plan:
     runs-on: ubuntu-latest
 
-    permissions:
-      contents: read
-      pull-requests: write
-
     env:
-      TF_BUCKET: vector-datadog-tfstate
+      TF_BUCKET: vector-datadog-tfstate-ash
       REGION: europe-west3
 
     steps:
-      # Checkout code
       - name: Checkout code
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
-      # Authenticate to GCP
+      - name: Parse product from changes
+        id: product
+        run: |
+          PRODUCT=$(git diff --name-only origin/main...HEAD | grep '^products/' | awk -F'/' '{print $2}' | sort | uniq | head -n 1)
+          if [ -z "$PRODUCT" ]; then
+            echo "❌ No product changes detected. Skipping workflow."
+            exit 1
+          fi
+          echo "product=$PRODUCT" >> $GITHUB_OUTPUT
+
+      - name: Generate image tag
+        id: image
+        run: echo "tag=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Export image tag for Terraform
+        run: echo "TF_VAR_image_tag=${{ steps.image.outputs.tag }}" >> $GITHUB_ENV
+
       - name: Authenticate to GCP
         id: auth
         uses: google-github-actions/auth@v1
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      # Export GOOGLE_APPLICATION_CREDENTIALS env
-      - name: Export GCP credentials path
-        run: echo "GOOGLE_APPLICATION_CREDENTIALS=${{ steps.auth.outputs.credentials_file_path }}" >> $GITHUB_ENV
-
-      - name: Parse product from changes
-        id: product
-        run: |
-          echo "🔍 Changed files:"
-          FILES=$(git diff --name-only origin/main...HEAD)
-          echo "$FILES"
-
-          echo "🔎 Parsing product name from files..."
-          PRODUCT=$(echo "$FILES" | grep '^products/' | awk -F'/' '{print $2}' | sort | uniq | head -n 1)
-
-          if [ -z "$PRODUCT" ]; then
-            echo "❌ No product changes detected. Skipping workflow."
-            exit 0
-          fi
-
-          echo "✅ Detected product: $PRODUCT"
-          echo "product=$PRODUCT" >> $GITHUB_OUTPUT
-
-
-      # # Parse product from changes
-      # - name: Parse product from changes
-      #   id: product
-      #   run: |
-      #     PRODUCT=$(git diff --name-only origin/main...HEAD | grep '^products/' | awk -F'/' '{print $2}' | sort | uniq | head -n 1)
-      #     if [ -z "$PRODUCT" ]; then
-      #       echo "❌ No product changes detected. Skipping workflow."
-      #       exit 1
-      #     fi
-      #     echo "Detected product: $PRODUCT"
-      #     echo "product=$PRODUCT" >> $GITHUB_OUTPUT
-      #     echo "PRODUCT=$PRODUCT" >> $GITHUB_ENV
-
-      # Generate image tag
-      - name: Generate image tag
-        id: image
-        run: echo "tag=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-
-      # Set GOOGLE_APPLICATION_CREDENTIALS env for Terraform
       - name: Set GOOGLE_APPLICATION_CREDENTIALS env
         run: echo "GOOGLE_APPLICATION_CREDENTIALS=${{ steps.auth.outputs.credentials_file_path }}" >> $GITHUB_ENV
 
-      # Setup Terraform
+      # ✅ Explicitly activate service account for gcloud and gsutil
+      - name: Activate service account for gsutil
+        run: |
+          gcloud auth activate-service-account --key-file="${{ steps.auth.outputs.credentials_file_path }}"
+          gcloud auth list
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
-      # Terraform Init
       - name: Terraform Init
-        run: terraform init -backend-config="bucket=${{ env.TF_BUCKET }}" -backend-config="prefix=vector/${{ env.PRODUCT }}-dev"
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
+        run: |
+          terraform init \
+            -backend-config="bucket=$TF_BUCKET" \
+            -backend-config="prefix=vector/${{ steps.product.outputs.product }}-dev"
         working-directory: deploy/terraform
 
-      # Terraform Validate
       - name: Terraform Validate
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
         run: terraform validate
         working-directory: deploy/terraform
 
-      # Terraform Plan
+      # - name: Terraform Plan
+      #   env:
+      #     GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
+      #   run: terraform plan -var-file="../../products/${{ steps.product.outputs.product }}/terraform.dev.tfvars" -out=tfplan
+      #   working-directory: deploy/terraform
       - name: Terraform Plan
-        run: terraform plan -no-color -lock-timeout=10s -out=tfplan > plan.txt
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
+        run: terraform plan -var-file="../../products/${{ steps.product.outputs.product }}/terraform.dev.tfvars" -no-color -out=tfplan > plan.txt
         working-directory: deploy/terraform
 
-      # Upload tfplan to GCS
-      - name: Upload tfplan to GCS
-        run: |
-          gsutil cp deploy/terraform/tfplan gs://$TF_BUCKET/vector/${{ env.PRODUCT }}/tfplan
 
-      # Upload plan output artifact
-      - name: Upload plan output
+      # ✅ Upload tfplan to GCS (fix: with activated account)
+      - name: Upload tfplan to GCS
+        run: gsutil cp deploy/terraform/tfplan gs://$TF_BUCKET/vector/${{ steps.product.outputs.product }}-dev/tfplan
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
+
+      - name: Upload plan output artifact
         uses: actions/upload-artifact@v4
         with:
           name: plan-output
           path: deploy/terraform/plan.txt
 
-      # Read plan output for comment
       - name: Read plan output
         id: read_plan
         run: |
@@ -189,16 +207,15 @@ jobs:
           cat deploy/terraform/plan.txt >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
 
-      # Comment plan on PR
       - name: Comment plan on PR
         uses: peter-evans/create-or-update-comment@v4
         with:
           issue-number: ${{ github.event.pull_request.number }}
           body: |
-            ## 📦 Terraform Plan Result
-            Terraform Plan Output for **${{ env.PRODUCT }}**:
+            ## 📦 Terraform Plan Result:
+            Docker image built: `${{ env.IMAGE_URI }}`
+            Terraform Plan Output:
             ```
             ${{ env.PLAN }}
             ```
-            ✅ Plan file saved to GCS: `gs://$TF_BUCKET/vector/${{ env.PRODUCT }}/tfplan`
-            ✅ Merge if approved, or comment `yes` to confirm apply.
+            ✅ Plan file and image tag saved to GCS. Merge to apply the changes.
