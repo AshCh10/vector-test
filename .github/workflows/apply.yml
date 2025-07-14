@@ -561,6 +561,9 @@ jobs:
       name: development
       url: https://your-dev-url-here # optional
 
+    outputs:
+      product: ${{ needs.plan.outputs.product }}
+      tag: ${{ needs.plan.outputs.image_tag }}
     env:
       REGION: europe-west3
       TF_BUCKET: vector-datadog-tfstate-ash
@@ -649,7 +652,7 @@ jobs:
       - name: Parse gcp_project from tfvars
         id: tfvars
         run: |
-          TFVARS_FILE=products/${{ needs.plan.outputs.product }}/terraform.prod.tfvars
+          TFVARS_FILE=products/${{ needs.deploy-dev.outputs.product }}/terraform.prod.tfvars
           GCP_PROJECT=$(grep -E '^ *gcp_project *=' "$TFVARS_FILE" | cut -d '"' -f2)
           echo "gcp_project=$GCP_PROJECT" >> $GITHUB_OUTPUT
 
@@ -670,5 +673,5 @@ jobs:
         working-directory: deploy/terraform
 
       - name: Terraform Apply (Prod)
-        run: terraform apply -auto-approve -var="image_tag=${{ needs.plan.outputs.image_tag }}" -var-file="../../products/${{ needs.plan.outputs.product }}/terraform.prod.tfvars"
+        run: terraform apply -auto-approve -var="image_tag=${{ needs.plan.outputs.image_tag }}" -var-file="../../products/${{ needs.deploy-dev.outputs.product }}/terraform.prod.tfvars"
         working-directory: deploy/terraform
