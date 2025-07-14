@@ -17,24 +17,34 @@ jobs:
         id: product
         run: |
           PRODUCT=$(git diff --name-only origin/main...HEAD | grep '^products/' | awk -F'/' '{print $2}' | sort | uniq | head -n 1)
+
+          if [ -z "$PRODUCT" ]; then
+            echo "❌ No product changes detected. Skipping workflow."
+            exit 0
+          fi
+
           echo "product=$PRODUCT" >> $GITHUB_OUTPUT
 
       - name: Validate vector.yaml template (optional)
+        if: steps.product.outputs.product != ''
         run: |
           cat products/${{ steps.product.outputs.product }}/vector.yaml.tmpl
-        # Optional: skip if you do not want static check on template
 
       - name: Setup Terraform
+        if: steps.product.outputs.product != ''
         uses: hashicorp/setup-terraform@v3
 
       - name: Terraform Init
+        if: steps.product.outputs.product != ''
         run: terraform init
         working-directory: deploy/terraform
 
       - name: Terraform Validate
+        if: steps.product.outputs.product != ''
         run: terraform validate
         working-directory: deploy/terraform
 
       - name: Terraform Plan
+        if: steps.product.outputs.product != ''
         run: terraform plan -var-file="../../products/${{ steps.product.outputs.product }}/terraform.dev.tfvars"
         working-directory: deploy/terraform
