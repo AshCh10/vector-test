@@ -469,23 +469,21 @@ name: Vector Plan & Deploy
 on:
   pull_request:
     branches: [main]
-  push:
-    branches: [main]
 
 jobs:
   plan:
-    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write
-    outputs:
-      product: ${{ steps.product.outputs.product }}
-      image_tag: ${{ steps.image.outputs.tag }}
 
     env:
       TF_BUCKET: vector-datadog-tfstate-ash
       REGION: europe-west3
+
+    outputs:
+      product: ${{ steps.product.outputs.product }}
+      image_tag: ${{ steps.image.outputs.tag }}
 
     steps:
       - name: Checkout code
@@ -496,19 +494,19 @@ jobs:
       - name: Parse product from changes
         id: product
         run: |
-          echo "Changed files:"
-          git diff --name-only origin/main...HEAD
           PRODUCT=$(git diff --name-only origin/main...HEAD | grep '^products/' | awk -F'/' '{print $2}' | sort | uniq | head -n 1)
           if [ -z "$PRODUCT" ]; then
             echo "❌ No product changes detected. Skipping workflow."
-            exit 0
+            exit 1
           fi
-          echo "Detected product: $PRODUCT"
           echo "product=$PRODUCT" >> $GITHUB_OUTPUT
 
       - name: Generate image tag
         id: image
         run: echo "tag=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Export image tag for Terraform
+        run: echo "TF_VAR_image_tag=${{ steps.image.outputs.tag }}" >> $GITHUB_ENV
 
       - name: Authenticate to GCP
         id: auth
@@ -554,21 +552,18 @@ jobs:
             ```
             ${{ env.PLAN }}
             ```
-            ✅ Review the plan. Merge this PR to deploy.
+            ✅ Review this plan and approve the deployment in Actions UI.
 
   deploy-dev:
-    if: github.event_name == 'push'
     needs: plan
     runs-on: ubuntu-latest
     environment:
       name: development
+      url: https://your-dev-url-here # optional
 
     env:
       REGION: europe-west3
       TF_BUCKET: vector-datadog-tfstate-ash
-
-    outputs:
-      tag: ${{ steps.set-tag.outputs.tag }}
 
     steps:
       - name: Checkout
@@ -601,10 +596,6 @@ jobs:
             | sed "s|\${pubsub_topic_name}|${{ steps.tfvars.outputs.pubsub_topic_name }}|g" \
             > "$OUTPUT_FILE"
           cat "$OUTPUT_FILE"
-
-      - name: Use tag from plan
-        id: tag
-        run: echo "tag=${{ needs.plan.outputs.image_tag }}" >> $GITHUB_OUTPUT
 
       - name: Ensure Artifact Registry exists
         run: |
@@ -641,16 +632,11 @@ jobs:
         run: terraform apply -auto-approve -var="image_tag=${{ needs.plan.outputs.image_tag }}" -var-file="../../products/${{ needs.plan.outputs.product }}/terraform.dev.tfvars"
         working-directory: deploy/terraform
 
-      - name: Set output tag
-        id: set-tag
-        run: echo "tag=${{ needs.plan.outputs.image_tag }}" >> $GITHUB_OUTPUT
-
   deploy-prod:
-    if: github.event_name == 'push'
     needs: deploy-dev
     runs-on: ubuntu-latest
     environment:
-      name: production # 👈 Requires manual approval!
+      name: production
 
     env:
       REGION: europe-west3
@@ -684,5 +670,5 @@ jobs:
         working-directory: deploy/terraform
 
       - name: Terraform Apply (Prod)
-        run: terraform apply -auto-approve -var="image_tag=${{ needs.deploy-dev.outputs.tag }}" -var-file="../../products/${{ needs.plan.outputs.product }}/terraform.prod.tfvars"
+        run: terraform apply -auto-approve -var="image_tag=${{ needs.plan.outputs.image_tag }}" -var-file="../../products/${{ needs.plan.outputs.product }}/terraform.prod.tfvars"
         working-directory: deploy/terraform
