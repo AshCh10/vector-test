@@ -1,0 +1,6 @@
+gcp_project = "stalwart-camera-463819-k5"
+gcp_region  = "europe-west3"
+system      = "radio"
+env = "dev"
+pubsub_topic_name = "vector-radio-dev-event"
+vector_domain  = ""
