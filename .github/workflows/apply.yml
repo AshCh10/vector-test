@@ -242,7 +242,7 @@ jobs:
       #     echo "product=$PRODUCT" >> $GITHUB_OUTPUT
 
       - name: Download build metadata
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: build-metadata
 
