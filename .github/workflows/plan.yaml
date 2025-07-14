@@ -9,6 +9,10 @@ jobs:
   plan:
     runs-on: ubuntu-latest
 
+    env:
+      TF_BUCKET: vector-datadog-tfstate
+      REGION: europe-west3
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -19,54 +23,38 @@ jobs:
         id: product
         run: |
           PRODUCT=$(git diff --name-only origin/main...HEAD | grep '^products/' | awk -F'/' '{print $2}' | sort | uniq | head -n 1)
-
           if [ -z "$PRODUCT" ]; then
             echo "❌ No product changes detected. Skipping workflow."
             exit 0
           fi
-
           echo "product=$PRODUCT" >> $GITHUB_OUTPUT
 
-      - name: Validate vector.yaml template (optional)
-        if: steps.product.outputs.product != ''
-        run: |
-          cat products/${{ steps.product.outputs.product }}/vector.yaml.tmpl
-
-      - name: Setup Terraform
-        if: steps.product.outputs.product != ''
-        uses: hashicorp/setup-terraform@v3
-
       - name: Authenticate to GCP
-        if: steps.product.outputs.product != ''
+        id: auth
         uses: google-github-actions/auth@v1
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      - name: Set GOOGLE_APPLICATION_CREDENTIALS
-        if: steps.product.outputs.product != ''
+      - name: Set GOOGLE_APPLICATION_CREDENTIALS env
         run: echo "GOOGLE_APPLICATION_CREDENTIALS=${{ steps.auth.outputs.credentials_file_path }}" >> $GITHUB_ENV
 
-
       - name: Terraform Init
-        if: steps.product.outputs.product != ''
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
-          CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE: ${{ steps.auth.outputs.credentials_file_path }}
-
         run: |
           terraform init \
-            -backend-config="bucket=vector-datadog-tfstate" \
+            -backend-config="bucket=$TF_BUCKET" \
             -backend-config="prefix=vector/${{ steps.product.outputs.product }}-dev"
         working-directory: deploy/terraform
 
-
-
       - name: Terraform Validate
-        if: steps.product.outputs.product != ''
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
         run: terraform validate
         working-directory: deploy/terraform
 
       - name: Terraform Plan
-        if: steps.product.outputs.product != ''
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
         run: terraform plan -var-file="../../products/${{ steps.product.outputs.product }}/terraform.dev.tfvars"
         working-directory: deploy/terraform
