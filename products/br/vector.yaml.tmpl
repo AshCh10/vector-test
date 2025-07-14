@@ -33,7 +33,7 @@ sinks:
   gcp_pubsub_sink:
     type: gcp_pubsub
     inputs: [enriched_http]
-    project= "${gcp_project}"
-    topic= "${pubsub_topic_name}"
+    project: "${gcp_project}"
+    topic: "${pubsub_topic_name}"
     encoding:
       codec: json
