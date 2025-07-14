@@ -218,4 +218,4 @@ jobs:
             ```
             ${{ env.PLAN }}
             ```
-            ✅ Plan file and image tag saved to GCS. Merge and Comment `yes` to apply the changes.
+            ✅ Plan file and image tag saved to GCS. Merge to apply the changes.
