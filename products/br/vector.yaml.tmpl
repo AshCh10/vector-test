@@ -35,6 +35,6 @@ sinks:
     enabled: ${GCP_SINK_ENABLED:-true}
     inputs: [enriched_http]
     project: "${gcp_project}"
-    topic: "${pubsub_topic_name}
+    topic: "${pubsub_topic_name}"
     encoding:
       codec: json
