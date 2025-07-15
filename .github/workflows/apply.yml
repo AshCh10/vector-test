@@ -168,15 +168,18 @@ jobs:
       - name: Terraform Apply (Dev)
         run: terraform apply -auto-approve -var="image_tag=${{ needs.plan.outputs.image_tag }}" -var-file="../../products/${{ needs.plan.outputs.product }}/terraform.dev.tfvars"
         working-directory: deploy/terraform
+
   await-prod-approval:
     needs: deploy-dev
     runs-on: ubuntu-latest
     steps:
       - name: 🔒 Await prod approval
-        uses: softprops/turnstyle@v0.3.0
+        uses: softprops/turnstyle@v2
         with:
+          # this name *must* match the unlock workflow
           lock: prod-deploy-${{ needs.deploy-dev.outputs.product }}
-          timeout: 72h
+          # how long to wait (in seconds) before failing
+          abort-after-seconds: 259200
 
 
   deploy-prod:
@@ -184,8 +187,8 @@ jobs:
       - deploy-dev
       - await-prod-approval
     runs-on: ubuntu-latest
-    environment:
-      name: production
+    # environment:
+    #   name: production
 
     env:
       REGION: europe-west3

@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       product:
-        description: 'Product name from the plan to unlock'
+        description: 'The product name (as shown in your plan step)'
         required: true
 
 jobs:
@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 🔓 Release prod lock
-        uses: softprops/turnstyle@v0.3.0
+        uses: softprops/turnstyle@v2
         with:
           lock: prod-deploy-${{ github.event.inputs.product }}
           run: unlock
