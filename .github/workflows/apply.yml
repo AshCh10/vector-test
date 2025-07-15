@@ -174,8 +174,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 🔒 Await prod approval
-        uses: softprops/turnstyle@v2
+        uses: softprops/turnstyle@v1
         with:
+          token: ${{ secrets.GITHUB_TOKEN }}
           # this name *must* match the unlock workflow
           lock: prod-deploy-${{ needs.deploy-dev.outputs.product }}
           # how long to wait (in seconds) before failing
@@ -183,6 +184,7 @@ jobs:
 
 
   deploy-prod:
+    if: github.event_name == 'push'
     needs: 
       - deploy-dev
       - await-prod-approval

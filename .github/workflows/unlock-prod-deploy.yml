@@ -12,7 +12,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 🔓 Release prod lock
-        uses: softprops/turnstyle@v2
+        uses: softprops/turnstyle@v1
         with:
+          token: ${{ secrets.GITHUB_TOKEN }}
           lock: prod-deploy-${{ github.event.inputs.product }}
           run: unlock
