@@ -614,12 +614,25 @@ jobs:
               --description="Vector repo for $REPO_NAME"
           fi
 
-      - name: Build and push image
+      # - name: Build and push image
+      #   run: |
+      #     IMAGE_URI="${{ env.REGION }}-docker.pkg.dev/${{ steps.tfvars.outputs.gcp_project }}/vector-${{ needs.plan.outputs.product }}-repository/my-vector-local:${{ needs.plan.outputs.image_tag }}"
+      #     echo "IMAGE_URI=$IMAGE_URI"
+      #     docker build -t "$IMAGE_URI" .
+      #     docker push "$IMAGE_URI"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image (amd64)
         run: |
           IMAGE_URI="${{ env.REGION }}-docker.pkg.dev/${{ steps.tfvars.outputs.gcp_project }}/vector-${{ needs.plan.outputs.product }}-repository/my-vector-local:${{ needs.plan.outputs.image_tag }}"
           echo "IMAGE_URI=$IMAGE_URI"
-          docker build -t "$IMAGE_URI" .
-          docker push "$IMAGE_URI"
+          docker buildx build --platform linux/amd64 -t "$IMAGE_URI" --push .
+
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
