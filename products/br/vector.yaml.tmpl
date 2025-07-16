@@ -17,6 +17,7 @@ sources:
       - s
       - idclient   
 
+
 transforms:
   enriched_http:
     type: remap
@@ -27,6 +28,7 @@ transforms:
       log("Raw incoming event: " + encode_json(.))
       .data = encode_base64(encode_gzip(encode_json(.)))
       . = { "data": .data }
+
 
 sinks:
   gcp_pubsub_sink:
