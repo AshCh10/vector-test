@@ -4,3 +4,4 @@ system      = "br"
 vector_domain  = ""
 env = "prod"
 pubsub_topic_name = "vector-br-dev-events"
+
