@@ -29,7 +29,8 @@ transforms:
       .data = encode_base64(encode_gzip(encode_json(.)))
       . = { "data": .data }
 
-#comment-test
+
+
 sinks:
   gcp_pubsub_sink:
     type: gcp_pubsub
